@@ -42,12 +42,13 @@ Host myserver
 
 Connect once manually (`ssh myserver`) to accept the host key into `known_hosts`.
 
-**4. Create shortcuts** (optional but recommended) so you can run `rsm` / `rsu` from anywhere:
+**4. Run the installer** to add the folder to your PATH and create Start Menu shortcuts (enables Win+R → `rsm` / `rsu`):
 
-- Right-click `rsm.vbs` → *Create shortcut* → move to `%APPDATA%\Microsoft\Windows\Start Menu\Programs`
-- Do the same for `rsu.vbs`
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
 
-Or add the folder to your `PATH`.
+This is safe to run multiple times — it won't duplicate the PATH entry.
 
 ## Usage
 
@@ -64,6 +65,7 @@ If your SSH key has a passphrase, a dialog will appear asking for it. Enter it a
 
 ```
 rs/
+├── install.ps1          # One-time setup: adds to PATH, creates Start Menu shortcuts
 ├── rsm.vbs              # Mount launcher (silent, no console window)
 ├── rsm-script.ps1       # Mount logic
 ├── rsu.vbs              # Unmount launcher (silent, no console window)
