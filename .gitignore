@@ -7,8 +7,5 @@ pids/
 logs/
 cache/
 
-# Shortcuts (machine-specific)
-*.lnk
-
 # Backups
 *.bkp

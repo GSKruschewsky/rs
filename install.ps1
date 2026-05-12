@@ -16,12 +16,11 @@ if ($entries -notcontains $scriptDir) {
 $env:PATH = [Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
             [Environment]::GetEnvironmentVariable("PATH", "User")
 
-# ── 2. Create Start Menu shortcuts (enables Win+R → rsm / rsu) ────────────────
-$startMenu = [Environment]::GetFolderPath("Programs")
-$shell     = New-Object -ComObject WScript.Shell
+# ── 2. Create shortcuts in this folder (enables Win+R → rsm / rsu via PATH) ───
+$shell = New-Object -ComObject WScript.Shell
 
 foreach ($name in @("rsm", "rsu")) {
-    $lnkPath = Join-Path $startMenu "$name.lnk"
+    $lnkPath = Join-Path $scriptDir "$name.lnk"
     $target  = Join-Path $scriptDir "$name.vbs"
 
     $shortcut                  = $shell.CreateShortcut($lnkPath)
@@ -34,8 +33,8 @@ foreach ($name in @("rsm", "rsu")) {
 }
 
 Write-Host ""
-Write-Host "Done. You can now run:"
-Write-Host "  rsm.vbs <hostname>   (from any terminal or Win+R)"
-Write-Host "  rsu.vbs <hostname>"
+Write-Host "Done. You can now run (from any terminal or Win+R):"
+Write-Host "  rsm <hostname>"
+Write-Host "  rsu <hostname>"
 Write-Host ""
 Write-Host "Restart open terminals for the PATH change to take effect."
