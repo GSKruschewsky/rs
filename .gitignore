@@ -1,0 +1,14 @@
+# rclone binary (download separately)
+rclone.exe
+rclone.1
+
+# Runtime artifacts
+pids/
+logs/
+cache/
+
+# Shortcuts (machine-specific)
+*.lnk
+
+# Backups
+*.bkp
