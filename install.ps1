@@ -26,7 +26,7 @@ foreach ($name in @("rsm", "rsu")) {
     $shortcut                  = $shell.CreateShortcut($lnkPath)
     $shortcut.TargetPath       = $target
     $shortcut.WorkingDirectory = $scriptDir
-    $shortcut.Description      = if ($name -eq "rsm") { "Mount SFTP share via rclone" } else { "Unmount SFTP share" }
+    $shortcut.Description      = if ($name -eq "rsm") { "Mount rclone SFTP share" } else { "Unmount rclone SFTP share" }
     $shortcut.Save()
 
     Write-Host "Shortcut created: $lnkPath"
