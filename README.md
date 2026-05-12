@@ -16,7 +16,8 @@ Silently mount and unmount any SSH host from your `~/.ssh/config` as a Windows n
 ## Requirements
 
 - Windows 10/11
-- [rclone](https://rclone.org/downloads/) — place `rclone.exe` in this folder
+- [rclone](https://rclone.org/downloads/) **v1.74.1** — place `rclone.exe` in this folder
+  > Built and tested against rclone `v1.74.1` (commit `076fb2bc`, 2026-05-08). Compatibility with newer versions is not guaranteed.
 - OpenSSH client (ships with Windows 10+)
 - Host entry in `~/.ssh/config` for every hostname you want to mount
 
