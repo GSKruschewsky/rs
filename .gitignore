@@ -12,3 +12,6 @@ cache/
 
 # Backups
 *.bkp
+
+# Executables
+*.exe
