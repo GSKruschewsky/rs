@@ -91,13 +91,14 @@ Logic (in order):
 4. Compute paths from `Assembly.GetExecutingAssembly().Location` (same as `$MyInvocation.MyCommand.Path`)
 5. `Directory.CreateDirectory` for pids/, logs/, cache/<hostname>/
 6. `File.WriteAllText(logFile, "")` — truncate for this session
-7. Clear stale `cancelFile` / `retryFile`, then set `SSH_ASKPASS=<scriptDir>\ssh-askpass.exe`, `SSH_ASKPASS_REQUIRE=force`, `RMOUNT_CANCEL_FILE=<cancelFile>`, `RMOUNT_RETRY_FILE=<retryFile>`
+7. Clear stale `driveFile` / `cancelFile` / `retryFile`, then set `SSH_ASKPASS=<scriptDir>\ssh-askpass.exe`, `SSH_ASKPASS_REQUIRE=force`, `RMOUNT_CANCEL_FILE=<cancelFile>`, `RMOUNT_RETRY_FILE=<retryFile>`
 8. Start rclone with `CreateNoWindow=true, WindowStyle=Hidden, UseShellExecute=false`
 9. Write `proc.Id` to pidFile
-10. Poll loop (200ms): `Directory.Exists(@"\\sftp\<hostname>")`
+10. Poll loop (200ms): enumerate network drives, resolve each drive letter back to its remote path with `WNetGetConnection`, and stop when one matches `@"\\sftp\<hostname>"`
 11. If `cancelFile` appears, stop the full rclone process tree with `taskkill /T /F`, delete `pidFile`, and leave the askpass state files in place so late `ssh-askpass` launches exit silently
-12. If rclone exits early, delete `pidFile` and exit 1; stale askpass state is cleared on the next launch
-13. On mount ready: delete askpass state files, then `Process.Start("explorer.exe", mountPath + @"\")`
+12. If a matching drive is found, persist its drive letter to `driveFile` for `rsu`
+13. If rclone exits early, delete `pidFile` / `driveFile` and exit 1; stale askpass state is cleared on the next launch
+14. On mount ready: delete askpass state files, then `Process.Start("explorer.exe", driveLetter + @"\")`
 
 ### Step 4 — rsu/Program.cs
 Replaces: `rsu-script.ps1` + `rsu.vbs`

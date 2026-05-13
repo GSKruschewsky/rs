@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
@@ -9,6 +11,9 @@ namespace Rmount
 {
     static class Program
     {
+        [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
+        static extern int WNetGetConnection(string localName, StringBuilder remoteName, ref int length);
+
         static void StopProcessTree(Process proc)
         {
             if (proc == null) return;
@@ -43,6 +48,69 @@ namespace Rmount
             }
 
             try { proc.WaitForExit(5000); } catch { }
+        }
+
+        static string NormalizePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+            return path.Trim().TrimEnd('\\').ToUpperInvariant();
+        }
+
+        static bool TryGetRemoteName(string localName, out string remoteName)
+        {
+            const int NoError = 0;
+            const int ErrorMoreData = 234;
+
+            int length = 260;
+            var buffer = new StringBuilder(length);
+            int result = WNetGetConnection(localName, buffer, ref length);
+
+            if (result == ErrorMoreData)
+            {
+                buffer = new StringBuilder(length);
+                result = WNetGetConnection(localName, buffer, ref length);
+            }
+
+            if (result == NoError)
+            {
+                remoteName = buffer.ToString();
+                return true;
+            }
+
+            remoteName = null;
+            return false;
+        }
+
+        static bool TryGetMountedDriveLetter(string remoteMountPath, out string driveLetter)
+        {
+            string normalizedMountPath = NormalizePath(remoteMountPath);
+
+            foreach (DriveInfo drive in DriveInfo.GetDrives())
+            {
+                try
+                {
+                    if (drive.DriveType != DriveType.Network)
+                        continue;
+
+                    string localName = drive.Name.TrimEnd('\\');
+                    string remoteName;
+                    if (!TryGetRemoteName(localName, out remoteName))
+                        continue;
+
+                    if (!string.Equals(NormalizePath(remoteName), normalizedMountPath, StringComparison.Ordinal))
+                        continue;
+
+                    driveLetter = localName;
+                    return true;
+                }
+                catch
+                {
+                    // Ignore transient drive enumeration failures while the mount is settling.
+                }
+            }
+
+            driveLetter = null;
+            return false;
         }
 
         [STAThread]
@@ -87,6 +155,7 @@ namespace Rmount
                 Assembly.GetExecutingAssembly().Location);
             string pidsDir    = Path.Combine(scriptDir, "pids");
             string pidFile    = Path.Combine(pidsDir, hostName + ".pid");
+            string driveFile  = Path.Combine(pidsDir, hostName + ".drive");
             string cacheDir   = Path.Combine(scriptDir, "cache", hostName);
             string logFile    = Path.Combine(scriptDir, "logs", hostName + ".log");
             string cancelFile = Path.Combine(pidsDir, hostName + ".askpass-cancel");
@@ -106,6 +175,7 @@ namespace Rmount
             Environment.SetEnvironmentVariable("SSH_ASKPASS_REQUIRE", "force");
 
             // Pass coordination files to ssh-askpass; clean up any stale state first
+            try { File.Delete(driveFile);  } catch { }
             try { File.Delete(cancelFile); } catch { }
             try { File.Delete(retryFile);  } catch { }
             Environment.SetEnvironmentVariable("RMOUNT_CANCEL_FILE", cancelFile);
@@ -135,12 +205,15 @@ namespace Rmount
             // Persist PID
             File.WriteAllText(pidFile, proc.Id.ToString());
 
+            string mountedDriveLetter = null;
+
             // Wait for the mount to become visible
             while (true)
             {
                 if (proc.HasExited)
                 {
                     try { File.Delete(pidFile);    } catch { }
+                    try { File.Delete(driveFile);  } catch { }
                     return 1;
                 }
 
@@ -149,15 +222,15 @@ namespace Rmount
                 {
                     StopProcessTree(proc);
                     try { File.Delete(pidFile); } catch { }
+                    try { File.Delete(driveFile); } catch { }
                     return 1;
                 }
 
-                try
+                if (TryGetMountedDriveLetter(mountPath, out mountedDriveLetter))
                 {
-                    if (Directory.Exists(mountPath))
-                        break;
+                    try { File.WriteAllText(driveFile, mountedDriveLetter); } catch { }
+                    break;
                 }
-                catch { /* share not ready yet */ }
 
                 System.Threading.Thread.Sleep(200);
             }
@@ -167,7 +240,7 @@ namespace Rmount
             try { File.Delete(retryFile); } catch { }
 
             // Open Explorer at the mount root
-            Process.Start("explorer.exe", mountPath + @"\");
+            Process.Start("explorer.exe", mountedDriveLetter + @"\");
             return 0;
         }
     }
