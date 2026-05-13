@@ -49,10 +49,12 @@ namespace Rmount
             // Paths
             string scriptDir = Path.GetDirectoryName(
                 Assembly.GetExecutingAssembly().Location);
-            string pidsDir  = Path.Combine(scriptDir, "pids");
-            string pidFile  = Path.Combine(pidsDir, hostName + ".pid");
-            string cacheDir = Path.Combine(scriptDir, "cache", hostName);
-            string logFile  = Path.Combine(scriptDir, "logs", hostName + ".log");
+            string pidsDir    = Path.Combine(scriptDir, "pids");
+            string pidFile    = Path.Combine(pidsDir, hostName + ".pid");
+            string cacheDir   = Path.Combine(scriptDir, "cache", hostName);
+            string logFile    = Path.Combine(scriptDir, "logs", hostName + ".log");
+            string cancelFile = Path.Combine(pidsDir, hostName + ".askpass-cancel");
+            string retryFile  = Path.Combine(pidsDir, hostName + ".askpass-retry");
 
             // Ensure directories exist
             Directory.CreateDirectory(pidsDir);
@@ -66,6 +68,12 @@ namespace Rmount
             string askpassExe = Path.Combine(scriptDir, "ssh-askpass.exe");
             Environment.SetEnvironmentVariable("SSH_ASKPASS", askpassExe);
             Environment.SetEnvironmentVariable("SSH_ASKPASS_REQUIRE", "force");
+
+            // Pass coordination files to ssh-askpass; clean up any stale state first
+            try { File.Delete(cancelFile); } catch { }
+            try { File.Delete(retryFile);  } catch { }
+            Environment.SetEnvironmentVariable("RMOUNT_CANCEL_FILE", cancelFile);
+            Environment.SetEnvironmentVariable("RMOUNT_RETRY_FILE",  retryFile);
 
             // Build rclone arguments
             string mountPath = @"\\sftp\" + hostName;
@@ -96,7 +104,19 @@ namespace Rmount
             {
                 if (proc.HasExited)
                 {
-                    try { File.Delete(pidFile); } catch { }
+                    try { File.Delete(pidFile);    } catch { }
+                    try { File.Delete(cancelFile); } catch { }
+                    try { File.Delete(retryFile);  } catch { }
+                    return 1;
+                }
+
+                // User cancelled or exhausted retries in the askpass dialog
+                if (File.Exists(cancelFile))
+                {
+                    try { if (!proc.HasExited) proc.Kill(); } catch { }
+                    try { File.Delete(pidFile);    } catch { }
+                    try { File.Delete(cancelFile); } catch { }
+                    try { File.Delete(retryFile);  } catch { }
                     return 1;
                 }
 
@@ -109,6 +129,9 @@ namespace Rmount
 
                 System.Threading.Thread.Sleep(200);
             }
+
+            // Clean up askpass state — mount succeeded
+            try { File.Delete(retryFile); } catch { }
 
             // Open Explorer at the mount root
             Process.Start("explorer.exe", mountPath + @"\");
