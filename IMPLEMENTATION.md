@@ -91,11 +91,13 @@ Logic (in order):
 4. Compute paths from `Assembly.GetExecutingAssembly().Location` (same as `$MyInvocation.MyCommand.Path`)
 5. `Directory.CreateDirectory` for pids/, logs/, cache/<hostname>/
 6. `File.WriteAllText(logFile, "")` — truncate for this session
-7. Set env vars: `SSH_ASKPASS=<scriptDir>\ssh-askpass.exe`, `SSH_ASKPASS_REQUIRE=force`
+7. Clear stale `cancelFile` / `retryFile`, then set `SSH_ASKPASS=<scriptDir>\ssh-askpass.exe`, `SSH_ASKPASS_REQUIRE=force`, `RMOUNT_CANCEL_FILE=<cancelFile>`, `RMOUNT_RETRY_FILE=<retryFile>`
 8. Start rclone with `CreateNoWindow=true, WindowStyle=Hidden, UseShellExecute=false`
 9. Write `proc.Id` to pidFile
-10. Poll loop (200ms): `Directory.Exists(@"\\sftp\<hostname>")` — if rclone exits early, delete pidFile + exit 1
-11. On mount ready: `Process.Start("explorer.exe", mountPath + @"\")`
+10. Poll loop (200ms): `Directory.Exists(@"\\sftp\<hostname>")`
+11. If `cancelFile` appears, stop the full rclone process tree with `taskkill /T /F`, delete `pidFile`, and leave the askpass state files in place so late `ssh-askpass` launches exit silently
+12. If rclone exits early, delete `pidFile` and exit 1; stale askpass state is cleared on the next launch
+13. On mount ready: delete askpass state files, then `Process.Start("explorer.exe", mountPath + @"\")`
 
 ### Step 4 — rsu/Program.cs
 Replaces: `rsu-script.ps1` + `rsu.vbs`
@@ -136,13 +138,17 @@ inherited pipe handle regardless of subsystem.
 
 Logic:
 1. Prompt = `SSH_ASKPASS_PROMPT` env var, then `args[0]`, then `"Enter passphrase:"`
-2. WinForms dialog (440×165, FixedDialog, TopMost):
+2. If `RMOUNT_CANCEL_FILE` already exists, exit 1 immediately without showing UI
+3. Track retries through `RMOUNT_RETRY_FILE`; after 3 failures, show the final error,
+  then create `RMOUNT_CANCEL_FILE` so the message stays visible until dismissed while any
+  later askpass launch still exits silently
+4. WinForms dialog (440×165, FixedDialog, TopMost):
    - Label (400×36 at 15,12) showing prompt
    - Masked TextBox (UseSystemPasswordChar=true, 395wide at 15,55)
    - OK button (80wide at 240,90) — AcceptButton
    - Cancel button (80wide at 330,90) — CancelButton
-3. ShowDialog → OK: Console.WriteLine(password) + return 0
-4. Cancel/close: return 1
+5. ShowDialog → OK: Console.WriteLine(password) + return 0
+6. Cancel/close: create `RMOUNT_CANCEL_FILE`, then return 1
 
 Note: SSH_ASKPASS_PROMPT compatibility is retained so any tooling that previously
 set that env var continues to work without change.

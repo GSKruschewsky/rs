@@ -23,6 +23,12 @@ namespace Rmount
             try { File.WriteAllText(cancelFile, "1"); } catch { }
         }
 
+        static bool IsCancellationRequested(string cancelFile)
+        {
+            if (string.IsNullOrEmpty(cancelFile)) return false;
+            try { return File.Exists(cancelFile); } catch { return false; }
+        }
+
         [STAThread]
         static int Main(string[] args)
         {
@@ -31,6 +37,9 @@ namespace Rmount
 
             string cancelFile = Environment.GetEnvironmentVariable("RMOUNT_CANCEL_FILE");
             string retryFile  = Environment.GetEnvironmentVariable("RMOUNT_RETRY_FILE");
+
+            if (IsCancellationRequested(cancelFile))
+                return 1;
 
             // ── Retry counter ─────────────────────────────────────────────────
             int attempt = 1;
@@ -44,6 +53,9 @@ namespace Rmount
                 }
                 try { File.WriteAllText(retryFile, attempt.ToString()); } catch { }
             }
+
+            if (IsCancellationRequested(cancelFile))
+                return 1;
 
             // ── Too many failures ─────────────────────────────────────────────
             if (attempt > MaxAttempts)
@@ -127,6 +139,9 @@ namespace Rmount
                 };
                 form.Controls.Add(cancelButton);
                 form.CancelButton = cancelButton;
+
+                if (IsCancellationRequested(cancelFile))
+                    return 1;
 
                 DialogResult result = form.ShowDialog();
 

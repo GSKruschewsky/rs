@@ -9,6 +9,42 @@ namespace Rmount
 {
     static class Program
     {
+        static void StopProcessTree(Process proc)
+        {
+            if (proc == null) return;
+
+            try
+            {
+                if (proc.HasExited) return;
+            }
+            catch
+            {
+                return;
+            }
+
+            try
+            {
+                var killPsi = new ProcessStartInfo("taskkill.exe", "/PID " + proc.Id + " /T /F")
+                {
+                    WindowStyle     = ProcessWindowStyle.Hidden,
+                    CreateNoWindow  = true,
+                    UseShellExecute = false
+                };
+
+                using (var killProc = Process.Start(killPsi))
+                {
+                    if (killProc != null)
+                        killProc.WaitForExit(5000);
+                }
+            }
+            catch
+            {
+                try { if (!proc.HasExited) proc.Kill(); } catch { }
+            }
+
+            try { proc.WaitForExit(5000); } catch { }
+        }
+
         [STAThread]
         static int Main(string[] args)
         {
@@ -105,18 +141,14 @@ namespace Rmount
                 if (proc.HasExited)
                 {
                     try { File.Delete(pidFile);    } catch { }
-                    try { File.Delete(cancelFile); } catch { }
-                    try { File.Delete(retryFile);  } catch { }
                     return 1;
                 }
 
                 // User cancelled or exhausted retries in the askpass dialog
                 if (File.Exists(cancelFile))
                 {
-                    try { if (!proc.HasExited) proc.Kill(); } catch { }
-                    try { File.Delete(pidFile);    } catch { }
-                    try { File.Delete(cancelFile); } catch { }
-                    try { File.Delete(retryFile);  } catch { }
+                    StopProcessTree(proc);
+                    try { File.Delete(pidFile); } catch { }
                     return 1;
                 }
 
@@ -131,6 +163,7 @@ namespace Rmount
             }
 
             // Clean up askpass state — mount succeeded
+            try { File.Delete(cancelFile); } catch { }
             try { File.Delete(retryFile); } catch { }
 
             // Open Explorer at the mount root
